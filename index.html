@@ -17,7 +17,7 @@
         this.container = document.createElement('a-entity');
         this.el.sceneEl.appendChild(this.container);
         
-        // Mouse controls
+        // Mouse controls (desktop)
         this.el.addEventListener('mousedown', () => {
           if (this.data.enabled) this.isDrawing = true;
         });
@@ -27,12 +27,26 @@
           this.points = [];
         });
         
-        // VR controller support
-        this.el.addEventListener('triggerdown', () => {
+        // VR controller support (Meta Quest)
+        this.el.addEventListener('triggerdown', (evt) => {
+          if (this.data.enabled) {
+            this.isDrawing = true;
+            console.log('Trigger down - drawing started');
+          }
+        });
+        
+        this.el.addEventListener('triggerup', (evt) => {
+          this.isDrawing = false;
+          this.points = [];
+          console.log('Trigger up - drawing stopped');
+        });
+        
+        // Additional VR events
+        this.el.addEventListener('gripdown', (evt) => {
           if (this.data.enabled) this.isDrawing = true;
         });
         
-        this.el.addEventListener('triggerup', () => {
+        this.el.addEventListener('gripup', (evt) => {
           this.isDrawing = false;
           this.points = [];
         });
@@ -40,7 +54,7 @@
       
       tick: function() {
         if (this.isDrawing) {
-          const pos = this.el.object3D.position.clone();
+          const pos = this.el.object3D.getWorldPosition(new THREE.Vector3());
           
           // Create stroke segment
           const sphere = document.createElement('a-sphere');
@@ -72,19 +86,31 @@
       },
       
       init: function() {
+        // Add clickable class for raycaster
+        this.el.classList.add('clickable');
+        
         this.el.addEventListener('click', () => {
-          const brush = document.querySelector('[brush]');
+          const brush = document.querySelector('#right-hand[brush]');
+          const particleBrush = document.querySelector('#right-hand[particle-brush]');
+          
           if (brush) {
             brush.setAttribute('brush', 'color', this.data.color);
             
             // Visual feedback
             this.el.emit('selected');
             
-            // Update cursor color
+            // Update cursor color for desktop
             const cursor = document.querySelector('a-cursor');
             if (cursor) {
               cursor.setAttribute('color', this.data.color);
             }
+            
+            // Update particle brush color too
+            if (particleBrush) {
+              particleBrush.setAttribute('particle-brush', 'color', this.data.color);
+            }
+            
+            console.log('Color changed to:', this.data.color);
           }
         });
       }
@@ -97,11 +123,15 @@
       },
       
       init: function() {
+        // Add clickable class for raycaster
+        this.el.classList.add('clickable');
+        
         this.el.addEventListener('click', () => {
-          const brush = document.querySelector('[brush]');
+          const brush = document.querySelector('#right-hand[brush]');
           if (brush) {
             brush.setAttribute('brush', 'size', this.data.size);
             this.el.emit('selected');
+            console.log('Brush size changed to:', this.data.size);
           }
         });
       }
@@ -110,8 +140,11 @@
     // Clear canvas button
     AFRAME.registerComponent('clear-button', {
       init: function() {
+        // Add clickable class for raycaster
+        this.el.classList.add('clickable');
+        
         this.el.addEventListener('click', () => {
-          const drawings = document.querySelectorAll('[brush] ~ a-entity');
+          const drawings = document.querySelectorAll('[brush] ~ a-entity, [particle-brush] ~ a-entity');
           drawings.forEach(drawing => {
             if (drawing.children.length > 0) {
               drawing.innerHTML = '';
@@ -120,6 +153,7 @@
           
           // Flash effect
           this.el.emit('clear-flash');
+          console.log('Canvas cleared!');
         });
       }
     });
@@ -136,6 +170,7 @@
         this.container = document.createElement('a-entity');
         this.el.sceneEl.appendChild(this.container);
         
+        // Mouse controls (desktop)
         this.el.addEventListener('mousedown', () => {
           if (this.data.enabled) this.isDrawing = true;
         });
@@ -143,11 +178,28 @@
         document.addEventListener('mouseup', () => {
           this.isDrawing = false;
         });
+        
+        // VR controller support (Meta Quest)
+        this.el.addEventListener('triggerdown', () => {
+          if (this.data.enabled) this.isDrawing = true;
+        });
+        
+        this.el.addEventListener('triggerup', () => {
+          this.isDrawing = false;
+        });
+        
+        this.el.addEventListener('gripdown', () => {
+          if (this.data.enabled) this.isDrawing = true;
+        });
+        
+        this.el.addEventListener('gripup', () => {
+          this.isDrawing = false;
+        });
       },
       
       tick: function() {
         if (this.isDrawing && this.data.enabled) {
-          const pos = this.el.object3D.position.clone();
+          const pos = this.el.object3D.getWorldPosition(new THREE.Vector3());
           
           // Create particle burst
           for (let i = 0; i < 3; i++) {
@@ -222,25 +274,40 @@
 <body>
   <div id="instructions">
     <h3>🎨 VR PAINT STUDIO</h3>
-    <p><strong>CLICK & DRAG</strong> to paint in 3D space!</p>
-    <p>Choose colors from the palette • Try different brush sizes • Clear canvas anytime</p>
+    <p><strong>DESKTOP:</strong> Click & drag to paint</p>
+    <p><strong>META QUEST 3:</strong> Pull trigger on right controller to paint!</p>
+    <p>Point at menus with controller laser • Choose colors & sizes • Clear canvas anytime</p>
   </div>
   
-  <a-scene background="color: #0a0015">
-    <!-- Camera with brush -->
-    <a-entity id="rig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls wasd-controls="acceleration: 15">
-        <!-- Brush tip indicator -->
-        <a-entity id="brush-tip" position="0 -0.2 -0.8" 
-                  brush="color: #FF006E; size: 0.05"
-                  particle-brush="color: #FF006E; enabled: false">
-          <a-sphere radius="0.03" color="#00FFF0" opacity="0.8"
-                    animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 500; loop: true"></a-sphere>
-        </a-entity>
-        
-        <!-- Cursor -->
+  <a-scene background="color: #0a0015" vr-mode-ui="enabled: true">
+    <!-- Camera rig for VR -->
+    <a-entity id="rig" position="0 0 0">
+      <!-- Camera -->
+      <a-entity id="camera" camera position="0 1.6 0" look-controls wasd-controls="acceleration: 15">
+        <!-- Desktop cursor (only visible in non-VR) -->
         <a-cursor color="#FF006E" fuse="true" fuse-timeout="800"
                   animation__click="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dur: 150; startEvents: click"></a-cursor>
+      </a-entity>
+      
+      <!-- LEFT HAND CONTROLLER (Meta Quest) -->
+      <a-entity id="left-hand" 
+                hand-controls="hand: left; handModelStyle: lowPoly; color: #FF006E"
+                laser-controls="hand: left"
+                raycaster="objects: .clickable; far: 10"
+                line="color: #FF006E; opacity: 0.5">
+      </a-entity>
+      
+      <!-- RIGHT HAND CONTROLLER (Meta Quest) - Main painting hand -->
+      <a-entity id="right-hand" 
+                hand-controls="hand: right; handModelStyle: lowPoly; color: #00FFF0"
+                laser-controls="hand: right"
+                raycaster="objects: .clickable; far: 10"
+                line="color: #00FFF0; opacity: 0.5"
+                brush="color: #FF006E; size: 0.05"
+                particle-brush="color: #FF006E; enabled: false">
+        <!-- Brush tip on controller -->
+        <a-sphere position="0 0 -0.05" radius="0.03" color="#00FFF0" opacity="0.8"
+                  animation="property: scale; to: 1.3 1.3 1.3; dir: alternate; dur: 500; loop: true"></a-sphere>
       </a-entity>
     </a-entity>
     

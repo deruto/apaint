@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script>
+    // Brush system for 3D painting
+    AFRAME.registerComponent('brush', {
+      schema: {
+        color: {default: '#FF006E'},
+        size: {default: 0.05},
+        enabled: {default: true}
+      },
+      
+      init: function() {
+        this.points = [];
+        this.isDrawing = false;
+        this.container = document.createElement('a-entity');
+        this.el.sceneEl.appendChild(this.container);
+        
+        // Mouse controls
+        this.el.addEventListener('mousedown', () => {
+          if (this.data.enabled) this.isDrawing = true;
+        });
+        
+        document.addEventListener('mouseup', () => {
+          this.isDrawing = false;
+          this.points = [];
+        });
+        
+        // VR controller support
+        this.el.addEventListener('triggerdown', () => {
+          if (this.data.enabled) this.isDrawing = true;
+        });
+        
+        this.el.addEventListener('triggerup', () => {
+          this.isDrawing = false;
+          this.points = [];
+        });
+      },
+      
+      tick: function() {
+        if (this.isDrawing) {
+          const pos = this.el.object3D.position.clone();
+          
+          // Create stroke segment
+          const sphere = document.createElement('a-sphere');
+          sphere.setAttribute('radius', this.data.size);
+          sphere.setAttribute('color', this.data.color);
+          sphere.setAttribute('metalness', 0.8);
+          sphere.setAttribute('roughness', 0.2);
+          sphere.object3D.position.copy(pos);
+          
+          // Add glow effect
+          sphere.setAttribute('animation', {
+            property: 'scale',
+            from: '0.5 0.5 0.5',
+            to: '1 1 1',
+            dur: 200,
+            easing: 'easeOutQuad'
+          });
+          
+          this.container.appendChild(sphere);
+          this.points.push(pos);
+        }
+      }
+    });
+    
+    // Color palette system
+    AFRAME.registerComponent('color-picker', {
+      schema: {
+        color: {default: '#FF006E'}
+      },
+      
+      init: function() {
+        this.el.addEventListener('click', () => {
+          const brush = document.querySelector('[brush]');
+          if (brush) {
+            brush.setAttribute('brush', 'color', this.data.color);
+            
+            // Visual feedback
+            this.el.emit('selected');
+            
+            // Update cursor color
+            const cursor = document.querySelector('a-cursor');
+            if (cursor) {
+              cursor.setAttribute('color', this.data.color);
+            }
+          }
+        });
+      }
+    });
+    
+    // Size control
+    AFRAME.registerComponent('size-picker', {
+      schema: {
+        size: {default: 0.05}
+      },
+      
+      init: function() {
+        this.el.addEventListener('click', () => {
+          const brush = document.querySelector('[brush]');
+          if (brush) {
+            brush.setAttribute('brush', 'size', this.data.size);
+            this.el.emit('selected');
+          }
+        });
+      }
+    });
+    
+    // Clear canvas button
+    AFRAME.registerComponent('clear-button', {
+      init: function() {
+        this.el.addEventListener('click', () => {
+          const drawings = document.querySelectorAll('[brush] ~ a-entity');
+          drawings.forEach(drawing => {
+            if (drawing.children.length > 0) {
+              drawing.innerHTML = '';
+            }
+          });
+          
+          // Flash effect
+          this.el.emit('clear-flash');
+        });
+      }
+    });
+    
+    // Special effect brushes
+    AFRAME.registerComponent('particle-brush', {
+      schema: {
+        color: {default: '#FF006E'},
+        enabled: {default: false}
+      },
+      
+      init: function() {
+        this.isDrawing = false;
+        this.container = document.createElement('a-entity');
+        this.el.sceneEl.appendChild(this.container);
+        
+        this.el.addEventListener('mousedown', () => {
+          if (this.data.enabled) this.isDrawing = true;
+        });
+        
+        document.addEventListener('mouseup', () => {
+          this.isDrawing = false;
+        });
+      },
+      
+      tick: function() {
+        if (this.isDrawing && this.data.enabled) {
+          const pos = this.el.object3D.position.clone();
+          
+          // Create particle burst
+          for (let i = 0; i < 3; i++) {
+            const particle = document.createElement('a-sphere');
+            particle.setAttribute('radius', 0.03);
+            particle.setAttribute('color', this.data.color);
+            particle.setAttribute('opacity', 0.8);
+            
+            const offset = {
+              x: (Math.random() - 0.5) * 0.2,
+              y: (Math.random() - 0.5) * 0.2,
+              z: (Math.random() - 0.5) * 0.2
+            };
+            
+            particle.object3D.position.set(
+              pos.x + offset.x,
+              pos.y + offset.y,
+              pos.z + offset.z
+            );
+            
+            particle.setAttribute('animation', {
+              property: 'scale',
+              to: '0 0 0',
+              dur: 1000,
+              easing: 'easeInQuad'
+            });
+            
+            this.container.appendChild(particle);
+            
+            // Remove after animation
+            setTimeout(() => particle.remove(), 1000);
+          }
+        }
+      }
+    });
+    
+    // Rotate environment
+    AFRAME.registerComponent('rotate-y', {
+      schema: {speed: {default: 1}},
+      tick: function(time, delta) {
+        this.el.object3D.rotation.y += this.data.speed * delta / 1000;
+      }
+    });
+  </script>
+  
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #instructions {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: #00FFF0;
+      padding: 15px 30px;
+      border-radius: 10px;
+      font-family: Arial, sans-serif;
+      z-index: 1000;
+      text-align: center;
+      border: 2px solid #FF006E;
+    }
+    #instructions h3 {
+      margin: 0 0 10px 0;
+      color: #FFD60A;
+    }
+    #instructions p {
+      margin: 5px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="instructions">
+    <h3>🎨 VR PAINT STUDIO</h3>
+    <p><strong>CLICK & DRAG</strong> to paint in 3D space!</p>
+    <p>Choose colors from the palette • Try different brush sizes • Clear canvas anytime</p>
+  </div>
+  
+  <a-scene background="color: #0a0015">
+    <!-- Camera with brush -->
+    <a-entity id="rig" position="0 1.6 0">
+      <a-entity id="camera" camera look-controls wasd-controls="acceleration: 15">
+        <!-- Brush tip indicator -->
+        <a-entity id="brush-tip" position="0 -0.2 -0.8" 
+                  brush="color: #FF006E; size: 0.05"
+                  particle-brush="color: #FF006E; enabled: false">
+          <a-sphere radius="0.03" color="#00FFF0" opacity="0.8"
+                    animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; dur: 500; loop: true"></a-sphere>
+        </a-entity>
+        
+        <!-- Cursor -->
+        <a-cursor color="#FF006E" fuse="true" fuse-timeout="800"
+                  animation__click="property: scale; from: 1 1 1; to: 1.8 1.8 1.8; dur: 150; startEvents: click"></a-cursor>
+      </a-entity>
+    </a-entity>
+    
+    <!-- COLOR PALETTE - Floating menu on the left -->
+    <a-entity id="color-palette" position="-2 1.6 -2">
+      <!-- Panel background -->
+      <a-plane width="0.8" height="2" color="#1a0033" opacity="0.8" metalness="0.5"></a-plane>
+      
+      <!-- Title -->
+      <a-text value="COLORS" position="0 0.85 0.01" align="center" color="#00FFF0" width="1.5" scale="0.5 0.5 0.5"></a-text>
+      
+      <!-- Color buttons -->
+      <a-sphere position="0 0.6 0.05" radius="0.08" color="#FF006E" metalness="0.9"
+                color-picker="color: #FF006E"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+      
+      <a-sphere position="0 0.4 0.05" radius="0.08" color="#FFD60A" metalness="0.9"
+                color-picker="color: #FFD60A"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+      
+      <a-sphere position="0 0.2 0.05" radius="0.08" color="#06FFA5" metalness="0.9"
+                color-picker="color: #06FFA5"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+      
+      <a-sphere position="0 0 0.05" radius="0.08" color="#4CC3D9" metalness="0.9"
+                color-picker="color: #4CC3D9"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+      
+      <a-sphere position="0 -0.2 0.05" radius="0.08" color="#8338EC" metalness="0.9"
+                color-picker="color: #8338EC"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+      
+      <a-sphere position="0 -0.4 0.05" radius="0.08" color="#F72585" metalness="0.9"
+                color-picker="color: #F72585"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+      
+      <a-sphere position="0 -0.6 0.05" radius="0.08" color="#FFFFFF" metalness="0.9"
+                color-picker="color: #FFFFFF"
+                animation__select="property: scale; to: 1.3 1.3 1.3; dur: 150; startEvents: selected"></a-sphere>
+    </a-entity>
+    
+    <!-- BRUSH SIZE MENU - Floating menu on the right -->
+    <a-entity id="size-menu" position="2 1.6 -2">
+      <!-- Panel background -->
+      <a-plane width="0.8" height="1.5" color="#1a0033" opacity="0.8" metalness="0.5"></a-plane>
+      
+      <!-- Title -->
+      <a-text value="BRUSH SIZE" position="0 0.65 0.01" align="center" color="#00FFF0" width="1.2" scale="0.4 0.4 0.4"></a-text>
+      
+      <!-- Size buttons -->
+      <a-sphere position="0 0.35 0.05" radius="0.03" color="#00FFF0" metalness="0.9"
+                size-picker="size: 0.03"
+                animation__select="property: scale; to: 1.5 1.5 1.5; dur: 150; startEvents: selected"></a-sphere>
+      <a-text value="Thin" position="0 0.2 0.05" align="center" color="#FFFFFF" width="1" scale="0.3 0.3 0.3"></a-text>
+      
+      <a-sphere position="0 0.05 0.05" radius="0.05" color="#00FFF0" metalness="0.9"
+                size-picker="size: 0.05"
+                animation__select="property: scale; to: 1.5 1.5 1.5; dur: 150; startEvents: selected"></a-sphere>
+      <a-text value="Medium" position="0 -0.1 0.05" align="center" color="#FFFFFF" width="1" scale="0.3 0.3 0.3"></a-text>
+      
+      <a-sphere position="0 -0.3 0.05" radius="0.08" color="#00FFF0" metalness="0.9"
+                size-picker="size: 0.08"
+                animation__select="property: scale; to: 1.5 1.5 1.5; dur: 150; startEvents: selected"></a-sphere>
+      <a-text value="Thick" position="0 -0.45 0.05" align="center" color="#FFFFFF" width="1" scale="0.3 0.3 0.3"></a-text>
+    </a-entity>
+    
+    <!-- CLEAR BUTTON - Center bottom -->
+    <a-entity id="clear-btn" position="0 0.8 -2.5">
+      <a-box width="0.8" height="0.3" depth="0.1" color="#FF006E" metalness="0.8"
+             clear-button
+             animation__hover="property: scale; to: 1.1 1.1 1.1; startEvents: mouseenter; dur: 200"
+             animation__hoverout="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 200"
+             animation__flash="property: material.color; from: #FF006E; to: #FFFFFF; startEvents: clear-flash; dur: 100; dir: alternate; loop: 2"></a-box>
+      <a-text value="CLEAR ALL" position="0 0 0.06" align="center" color="#FFFFFF" width="1.5" scale="0.4 0.4 0.4"></a-text>
+    </a-entity>
+    
+    <!-- AMBIENT SCENE - Rotating inspiration objects -->
+    <a-entity id="ambient-scene" position="0 0 0" rotate-y="speed: 0.1">
+      <!-- Floating reference shapes for inspiration -->
+      <a-octahedron position="0 3 -8" radius="0.5" color="#8338EC" opacity="0.3" wireframe="true"
+                    animation="property: rotation; to: 360 360 0; dur: 10000; loop: true; easing: linear"></a-octahedron>
+      
+      <a-torus position="-5 2.5 -6" radius="0.8" radius-tubular="0.1" color="#FF006E" opacity="0.3"
+               animation="property: rotation; to: 0 360 360; dur: 15000; loop: true; easing: linear"></a-torus>
+      
+      <a-torus position="5 2.5 -6" radius="0.8" radius-tubular="0.1" color="#06FFA5" opacity="0.3"
+               animation="property: rotation; to: 360 0 360; dur: 12000; loop: true; easing: linear"></a-torus>
+      
+      <a-icosahedron position="-4 3.5 -10" radius="0.6" color="#FFD60A" opacity="0.3" wireframe="true"
+                     animation="property: rotation; to: 0 0 360; dur: 8000; loop: true; easing: linear"></a-icosahedron>
+      
+      <a-icosahedron position="4 3.5 -10" radius="0.6" color="#4CC3D9" opacity="0.3" wireframe="true"
+                     animation="property: rotation; to: 360 360 360; dur: 11000; loop: true; easing: linear"></a-icosahedron>
+    </a-entity>
+    
+    <!-- Canvas space indicator - Ground grid -->
+    <a-entity id="canvas-space">
+      <a-cylinder position="0 -0.5 -5" radius="5" height="0.1" color="#560BAD" opacity="0.3"
+                  animation="property: material.opacity; to: 0.5; dir: alternate; dur: 3000; loop: true"></a-cylinder>
+      
+      <!-- Grid lines -->
+      <a-torus position="0 -0.4 -5" radius="3" radius-tubular="0.02" color="#00FFF0" opacity="0.4"
+               rotation="90 0 0"></a-torus>
+      <a-torus position="0 -0.4 -5" radius="4" radius-tubular="0.02" color="#FF006E" opacity="0.3"
+               rotation="90 0 0"></a-torus>
+    </a-entity>
+    
+    <!-- Atmospheric particles -->
+    <a-entity id="atmosphere">
+      <a-sphere position="-3 4 -10" radius="0.05" color="#ffffff" opacity="0.6"
+                animation="property: position; to: -3 5 -10; dir: alternate; dur: 4000; loop: true; easing: easeInOutSine"></a-sphere>
+      <a-sphere position="4 3 -12" radius="0.06" color="#ffffff" opacity="0.5"
+                animation="property: position; to: 4 4.5 -12; dir: alternate; dur: 5000; loop: true; easing: easeInOutSine"></a-sphere>
+      <a-sphere position="-5 5 -8" radius="0.04" color="#ffffff" opacity="0.7"
+                animation="property: position; to: -5 6 -8; dir: alternate; dur: 3500; loop: true; easing: easeInOutSine"></a-sphere>
+      <a-sphere position="2 6 -15" radius="0.05" color="#ffffff" opacity="0.6"
+                animation="property: position; to: 2 7 -15; dir: alternate; dur: 4500; loop: true; easing: easeInOutSine"></a-sphere>
+    </a-entity>
+    
+    <!-- Lighting -->
+    <a-light type="ambient" intensity="0.7" color="#8338EC"></a-light>
+    <a-light type="point" position="-2 2 -2" intensity="1.5" color="#FF006E"></a-light>
+    <a-light type="point" position="2 2 -2" intensity="1.5" color="#06FFA5"></a-light>
+    <a-light type="point" position="0 4 -5" intensity="1.2" color="#FFD60A"
+             animation="property: intensity; to: 0.6; dir: alternate; dur: 2000; loop: true"></a-light>
+    
+    <!-- Title text -->
+    <a-text value="VR PAINT STUDIO" position="0 3.5 -5" align="center" color="#00FFF0" 
+            width="8" font="https://cdn.aframe.io/fonts/Exo2Bold.fnt"
+            animation="property: position; to: 0 3.7 -5; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine"></a-text>
+  </a-scene>
+</body>
+</html>
